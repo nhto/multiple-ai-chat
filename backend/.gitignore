@@ -1,0 +1,17 @@
+# dependencies
+/node_modules
+/node_modules/.cache/
+
+
+# UI Build
+/src/adminapp/public
+/src/userapp/public
+
+# OLPP keys
+/olpp
+
+# Environment Files
+.env.*
+.env.uat
+.env.dev
+.env

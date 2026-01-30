@@ -1,0 +1,180 @@
+
+/**
+ * dotenv .env file import
+ * TODO: Configure NODE_ENV in .env file, and set default to 'production'
+ */
+import dotenv from 'dotenv';
+
+dotenv.config({ path: process.env.DOTENV_CONFIG_PATH });
+process.env.NODE_ENV = process.env.NODE_ENV ? process.env.NODE_ENV : 'production';
+
+const NODE_ENV: string = process.env.NODE_ENV || 'production';
+const LOGGING_LEVEL: string = process.env.LOGGING_LEVEL || 'info';
+const APP_URL: string = process.env.APP_URL;
+const APP_USER_URL: string = process.env.APP_USER_URL;
+const APP_PHOTO_URL: string = process.env.APP_PHOTO_URL;
+const APP_DOCUMENT_URL: string = process.env.APP_DOCUMENT_URL;
+const APP_NEWS_URL: string = process.env.APP_NEWS_URL;
+const APP_AMS_URL: string = process.env.APP_AMS_URL;
+const APP_AMS_DECIDER_URL: string = process.env.APP_AMS_DECIDER_URL;
+
+const HTTP_LISTEN_PORT: string | number = normalizePort(process.env.HTTP_LISTEN_PORT) || 3000;
+const SESSION_TIMEOUT: number = Number.parseInt(process.env.SESSION_TIMEOUT || '1800', 10);
+
+const MSAL_POLYUSSO_CLIENT_ID: string = process.env.MSAL_POLYUSSO_CLIENT_ID;
+const MSAL_POLYUSSO_AUTHORITY: string = process.env.MSAL_POLYUSSO_AUTHORITY;
+const MSAL_POLYUSSO_SECRETS: string = process.env.MSAL_POLYUSSO_SECRETS;
+const MSAL_POLYUSSO_REDIRECT_URI: string = process.env.MSAL_POLYUSSO_REDIRECT_URI;
+const MSAL_POLYUSSO_LOGOUT_URI: string = process.env.MSAL_POLYUSSO_LOGOUT_URI || '/';
+
+const DB_DRIVER: string = process.env.DB_DRIVER;
+const DB_SERVER: string = process.env.DB_SERVER;
+const DB_USER: string = process.env.DB_USER;
+const DB_PASSWORD: string = process.env.DB_PASSWORD;
+const DB_PORT: number = Number.parseInt(process.env.DB_PORT, 10);
+const DB_DB: string = process.env.DB_DB;
+
+const IAMAPI_BASEURL: string = process.env.IAMAPI_BASEURL;
+const IAMAPI_USERNAME: string = process.env.IAMAPI_USERNAME;
+const IAMAPI_PASSWORD: string = process.env.IAMAPI_PASSWORD;
+
+// const MSAL_KEYCLOAK_CLIENT_ID: string = process.env.MSAL_KEYCLOAK_CLIENT_ID;
+// const MSAL_KEYCLOAK_AUTHORITY: string = process.env.MSAL_KEYCLOAK_AUTHORITY;
+// const MSAL_KEYCLOAK_SECRETS_ALUMNI: string = process.env.MSAL_KEYCLOAK_SECRETS_ALUMNI;
+// const MSAL_KEYCLOAK_SECRETS_PUBLIC: string = process.env.MSAL_KEYCLOAK_SECRETS_PUBLIC;
+// const MSAL_KEYCLOAK_REDIRECT_URI: string = process.env.MSAL_KEYCLOAK_REDIRECT_URI;
+// const MSAL_KEYCLOAK_LOGOUT_URI: string = process.env.MSAL_KEYCLOAK_LOGOUT_URI;
+// const MSAL_KEYCLOAK_AUTHORITY_TYPE_ALUMNI: string = process.env.MSAL_KEYCLOAK_AUTHORITY_TYPE_ALUMNI;
+// const MSAL_KEYCLOAK_AUTHORITY_TYPE_PUBLIC: string = process.env.MSAL_KEYCLOAK_AUTHORITY_TYPE_PUBLIC;
+
+const MSAL_KEYCLOAK_PUBLIC_CLIENT_ID: string = process.env.MSAL_KEYCLOAK_PUBLIC_CLIENT_ID;
+const MSAL_KEYCLOAK_PUBLIC_AUTHORITY: string = process.env.MSAL_KEYCLOAK_PUBLIC_AUTHORITY;
+const MSAL_KEYCLOAK_PUBLIC_SECRETS: string = process.env.MSAL_KEYCLOAK_PUBLIC_SECRETS;
+const MSAL_KEYCLOAK_PUBLIC_REDIRECT_URI: string = process.env.MSAL_KEYCLOAK_PUBLIC_REDIRECT_URI;
+const MSAL_KEYCLOAK_PUBLIC_LOGOUT_URI: string = process.env.MSAL_KEYCLOAK_PUBLIC_LOGOUT_URI;
+
+const MSAL_KEYCLOAK_ALUMNI_CLIENT_ID: string = process.env.MSAL_KEYCLOAK_ALUMNI_CLIENT_ID;
+const MSAL_KEYCLOAK_ALUMNI_AUTHORITY: string = process.env.MSAL_KEYCLOAK_ALUMNI_AUTHORITY;
+const MSAL_KEYCLOAK_ALUMNI_SECRETS: string = process.env.MSAL_KEYCLOAK_ALUMNI_SECRETS;
+const MSAL_KEYCLOAK_ALUMNI_REDIRECT_URI: string = process.env.MSAL_KEYCLOAK_ALUMNI_REDIRECT_URI;
+const MSAL_KEYCLOAK_ALUMNI_LOGOUT_URI: string = process.env.MSAL_KEYCLOAK_ALUMNI_LOGOUT_URI;
+
+const SMTP_HOST: string = process.env.SMTP_HOST;
+const SMTP_PORT: number = Number.parseInt(process.env.SMTP_PORT, 10);
+const SMTP_SECURE: boolean = String(process.env.SMTP_SECURE).toLowerCase() === 'true';
+const SMTP_TLS: boolean = String(process.env.SMTP_TLS).toLowerCase() === 'true';
+const SMTP_USER: string = process.env.SMTP_USER;
+const SMTP_PASSWORD: string = process.env.SMTP_PASSWORD;
+const SMTP_FROM_OVERRIDE: string = process.env.SMTP_FROM_OVERRIDE;
+
+const OLPPAPI_BASEURL: string = process.env.OLPPAPI_BASEURL;
+const OLPPAPI_CREATE_REQUEST_TYPE: string = process.env.OLPPAPI_CREATE_REQUEST_TYPE;
+const OLPPAPI_CREATE_REQUEST: string = process.env.OLPPAPI_CREATE_REQUEST;
+const OLPPAPI_CREATE_ITEMS_REQUEST: string = process.env.OLPPAPI_CREATE_ITEMS_REQUEST;
+const OLPPAPI_STATUS_ENQUIRY: string = process.env.OLPPAPI_STATUS_ENQUIRY;
+const OLPPAPI_KEY_FILEPATH_PUBLIC: string = process.env.OLPPAPI_KEY_FILEPATH_PUBLIC;
+const OLPPAPI_KEY_FILEPATH_PRIVATE: string = process.env.OLPPAPI_KEY_FILEPATH_PRIVATE;
+const OLPP_EMAIL_BCC: string = process.env.OLPP_EMAIL_BCC;
+
+const S3CLIENT_ENDPOINT: string = process.env.S3CLIENT_ENDPOINT;
+const S3CLIENT_REGION: string = process.env.S3CLIENT_REGION;
+const S3CLIENT_ACCESSKEYID: string = process.env.S3CLIENT_ACCESSKEYID;
+const S3CLIENT_SECRETACCESSKEY: string = process.env.S3CLIENT_SECRETACCESSKEY;
+const S3CLIENT_BUCKET: string = process.env.S3CLIENT_BUCKET;
+const S3CLIENT_GALLERY_FOLDER: string = process.env.S3CLIENT_GALLERY_FOLDER;
+const S3CLIENT_DOCUMENT_FOLDER: string = process.env.S3CLIENT_DOCUMENT_FOLDER;
+const S3CLIENT_AMS_FOLDER: string = process.env.S3CLIENT_AMS_FOLDER;
+const S3CLIENT_ATTACHMENT_FOLDER: string = process.env.S3CLIENT_ATTACHMENT_FOLDER;
+const S3CLIENT_PROMOTION_WEB_CONTENT_FOLDER: string = process.env.S3CLIENT_PROMOTION_WEB_CONTENT_FOLDER;
+const S3CLIENT_URL: string = process.env.S3CLIENT_URL;
+
+/**
+ * Normalize a port into a number, string, or false.
+ */
+function normalizePort(val: string) {
+  const port = parseInt(val, 10);
+  if (isNaN(port)) {
+    // named pipe
+    return val;
+  }
+  if (port >= 0) {
+    // port number
+    return port;
+  }
+  return false;
+}
+
+export {
+  NODE_ENV,
+  LOGGING_LEVEL,
+  APP_URL,
+  APP_USER_URL,
+  APP_PHOTO_URL,
+  APP_DOCUMENT_URL,
+  APP_NEWS_URL,
+  APP_AMS_URL,
+  APP_AMS_DECIDER_URL,
+  HTTP_LISTEN_PORT,
+  SESSION_TIMEOUT,
+  MSAL_POLYUSSO_CLIENT_ID,
+  MSAL_POLYUSSO_AUTHORITY,
+  MSAL_POLYUSSO_SECRETS,
+  MSAL_POLYUSSO_REDIRECT_URI,
+  MSAL_POLYUSSO_LOGOUT_URI,
+  DB_DRIVER,
+  DB_SERVER,
+  DB_USER,
+  DB_PASSWORD,
+  DB_PORT,
+  DB_DB,
+  IAMAPI_BASEURL,
+  IAMAPI_USERNAME,
+  IAMAPI_PASSWORD,
+  // MSAL_KEYCLOAK_CLIENT_ID,
+  // MSAL_KEYCLOAK_AUTHORITY,
+  // MSAL_KEYCLOAK_SECRETS_ALUMNI,
+  // MSAL_KEYCLOAK_SECRETS_PUBLIC,
+  // MSAL_KEYCLOAK_REDIRECT_URI,
+  // MSAL_KEYCLOAK_LOGOUT_URI,
+  // MSAL_KEYCLOAK_AUTHORITY_TYPE_ALUMNI,
+  // MSAL_KEYCLOAK_AUTHORITY_TYPE_PUBLIC,
+
+  MSAL_KEYCLOAK_PUBLIC_CLIENT_ID,
+  MSAL_KEYCLOAK_PUBLIC_AUTHORITY,
+  MSAL_KEYCLOAK_PUBLIC_SECRETS,
+  MSAL_KEYCLOAK_PUBLIC_REDIRECT_URI,
+  MSAL_KEYCLOAK_PUBLIC_LOGOUT_URI,
+
+  MSAL_KEYCLOAK_ALUMNI_CLIENT_ID,
+  MSAL_KEYCLOAK_ALUMNI_AUTHORITY,
+  MSAL_KEYCLOAK_ALUMNI_SECRETS,
+  MSAL_KEYCLOAK_ALUMNI_REDIRECT_URI,
+  MSAL_KEYCLOAK_ALUMNI_LOGOUT_URI,
+  
+  SMTP_HOST,
+  SMTP_PORT,
+  SMTP_SECURE,
+  SMTP_TLS,
+  SMTP_USER,
+  SMTP_PASSWORD,
+  SMTP_FROM_OVERRIDE,
+  OLPPAPI_BASEURL,
+  OLPPAPI_CREATE_REQUEST_TYPE,
+  OLPPAPI_CREATE_REQUEST,
+  OLPPAPI_CREATE_ITEMS_REQUEST,
+  OLPPAPI_STATUS_ENQUIRY,
+  OLPPAPI_KEY_FILEPATH_PUBLIC,
+  OLPPAPI_KEY_FILEPATH_PRIVATE,
+  OLPP_EMAIL_BCC,
+  S3CLIENT_ENDPOINT,
+  S3CLIENT_REGION,
+  S3CLIENT_ACCESSKEYID,
+  S3CLIENT_SECRETACCESSKEY,
+  S3CLIENT_BUCKET,
+  S3CLIENT_GALLERY_FOLDER,
+  S3CLIENT_DOCUMENT_FOLDER,
+  S3CLIENT_AMS_FOLDER,
+  S3CLIENT_ATTACHMENT_FOLDER,
+  S3CLIENT_PROMOTION_WEB_CONTENT_FOLDER,
+  S3CLIENT_URL,
+};
