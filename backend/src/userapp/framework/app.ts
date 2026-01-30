@@ -1,31 +1,15 @@
 import express from 'express';
 import morgan from 'morgan';
 import helmet from 'helmet';
-import polyussoRouter from '../routes/controllers/polyusso';
-import keycloakRouter from '../routes/controllers/keycloak';
-import logoutRouter from '../routes/controllers/logout';
+import cors from 'cors';
 import spaRouter from '../routes/controllers/spa';
-import olppCallbackRouter from '../routes/controllers/olpp';
+import chatRouter from '../routes/controllers/api/chat';
 import handleError from '../routes/middlewares/error';
-import pingRouter from '../routes/controllers/api/ping';
-import refreshRouter from '../routes/controllers/api/refresh';
-import meRouter from '../routes/controllers/api/me';
-import userTypeRouter from '../routes/controllers/api/userType';
-import notfoundRouter from '../routes/controllers/api/notfound';
-import sessionMiddleware from './session';
-import { extendActiveSession, requireActiveSession, requireRole } from '../routes/middlewares/authn';
 import * as config from '../../utilities/config'
 
 function initHelmet(app: express.Express) {
 
   // Customize helmet filters to meet web security scan requirement
-  // app.use(helmet());
-  app.use(helmet.contentSecurityPolicy({
-    useDefaults: true,
-    directives: {
-      connectSrc: ["'self'", config.OLPPAPI_BASEURL]
-    }
-  }));
   app.use(helmet.dnsPrefetchControl());
   app.use(helmet.expectCt());
   app.use(helmet.frameguard());
@@ -52,28 +36,19 @@ const expressApp = express();
 initHelmet(expressApp);
 initMorgan(expressApp);
 
+// Enable CORS for frontend
+expressApp.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true
+}));
+
 expressApp.use(express.json());
 expressApp.use(express.urlencoded({ extended: false }));
-expressApp.use(sessionMiddleware);
 
-// Handle Communal API requests
-expressApp.use('/communal/userType', userTypeRouter);
+// API routes
+expressApp.use('/api/chat', chatRouter);
 
-// All API requests require active session
-expressApp.use('/api', requireActiveSession);
-
-// Handle API requests
-expressApp.use('/api/ping', pingRouter);
-expressApp.use('/api/refresh', extendActiveSession, refreshRouter);
-expressApp.use('/api/me', extendActiveSession, meRouter);
-expressApp.use('/api', notfoundRouter);
-
-// handle every other route with index.html, which will contain
-// a script tag to your application's JavaScript file(s).
-expressApp.use(polyussoRouter);
-expressApp.use(keycloakRouter);
-expressApp.use(logoutRouter);
-expressApp.use(olppCallbackRouter);
+// SPA routes (should be last)
 expressApp.use(spaRouter);
 
 // error handler

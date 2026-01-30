@@ -8,7 +8,6 @@
     "postbuild": "cp -r ./src/img ./dist",
     "prestart": "npm run build",
     "start": ">&2 echo 'Usage: npm userapp|adminapp|publicapp|console'",
-    "adminapp": "ts-node ./src/adminapp/index.ts",
     "userapp": "ts-node ./src/userapp/index.ts"
   },
   "dependencies": {

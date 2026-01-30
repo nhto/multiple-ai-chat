@@ -1,16 +1,12 @@
-//Material-UI
-import ProtectedRoute from './../components/util/ProtectedRoute/ProtectedRoute';
-import { Routes, Route, Outlet } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 import React from 'react';
-import { useSelector } from 'react-redux';
+import ChatPage from './ChatPage/ChatPage';
 
 function PageRouter() {
-
   return (
     <Routes>
-      <Route>
-        <Route path="" element={<p>Home Page</p>} />
-      </Route>
+      <Route path="/" element={<ChatPage />} />
+      <Route path="/chat" element={<ChatPage />} />
       <Route path="*" element={<p>Not Found</p>} />
     </Routes>
   );
