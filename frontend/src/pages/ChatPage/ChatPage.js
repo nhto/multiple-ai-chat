@@ -204,14 +204,17 @@ const ChatPage = () => {
                   elevation={1}
                   sx={{
                     p: 2,
-                    maxWidth: '70%',
-                    backgroundColor: '#1976d2',
-                    color: 'white'
+                    maxWidth: '80%',
+                    backgroundColor: '#e3f2fd',
+                    color: 'text.primary',
+                    borderRadius: '16px 16px 2px 16px',
+                    border: '1px solid',
+                    borderColor: '#bbdefb'
                   }}
                 >
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, color: 'primary.main' }}>
                     <PersonIcon sx={{ mr: 1, fontSize: 20 }} />
-                    <Typography variant="subtitle2">{t('userLabel')}</Typography>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>{t('userLabel')}</Typography>
                   </Box>
                   <Box 
                     sx={{ 
@@ -277,7 +280,7 @@ const ChatPage = () => {
                             sx={{
                               maxHeight: '400px',
                               overflow: 'auto',
-                              pr: 1, // Add some padding for the scrollbar
+                              px: 2, // Add some padding for the scrollbar
                               '&::-webkit-scrollbar': {
                                 width: '6px',
                               },
