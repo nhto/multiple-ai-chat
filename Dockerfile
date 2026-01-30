@@ -41,6 +41,11 @@ RUN mkdir public
 # Frontend
 FROM node:18-buster AS ui
 
+# Render passes Environment Variables as Docker build args; declare them so
+# they are available during npm run build (CRA bakes REACT_APP_* at build time).
+ARG REACT_APP_API_URL
+ENV REACT_APP_API_URL=$REACT_APP_API_URL
+
 RUN mkdir /home/node/src-ui && \
     chown node:node /home/node/src-ui && \
     chmod 755 /home/node/src-ui
