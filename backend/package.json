@@ -5,7 +5,7 @@
   "scripts": {
     "prebuild": "tslint -c tslint.json -p tsconfig.json --fix",
     "build": "tsc --build --clean && tsc --noEmit",
-    "postbuild": "cp -r ./src/img ./dist",
+    "postbuild": "node scripts/copy-img.js",
     "prestart": "npm run build",
     "start": ">&2 echo 'Usage: npm userapp|adminapp|publicapp|console'",
     "userapp": "ts-node ./src/userapp/index.ts"
