@@ -3,7 +3,6 @@ import { createSlice, isRejected, isPending, isFulfilled } from '@reduxjs/toolki
 import * as AppSlice from '../../../AppSlice';
 
 const monitorLoadingThunks = [
-  AppSlice.initApp,
 ];
 
 export const LoadingBackdropSlice = createSlice(
