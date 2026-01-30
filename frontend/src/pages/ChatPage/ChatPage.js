@@ -17,11 +17,13 @@ import {
 import SendIcon from '@mui/icons-material/Send';
 import PersonIcon from '@mui/icons-material/Person';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
+import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
+import ReplayIcon from '@mui/icons-material/Replay';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { sendChatMessage } from '../../api/chatApi';
+import { sendChatMessageStream, buildChatHistory, retryFailedModel } from '../../api/chatApi';
 
 const MarkdownComponents = {
 // ... MarkdownComponents content
@@ -106,6 +108,7 @@ const ChatPage = () => {
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [retryingKey, setRetryingKey] = useState(null);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -130,23 +133,64 @@ const ChatPage = () => {
       timestamp: new Date().toISOString()
     };
     setMessages(prev => [...prev, newUserMessage]);
+
+    // Placeholder AI message; responses will be updated as stream chunks arrive
+    const placeholderAiMessage = {
+      type: 'ai',
+      responses: [],
+      timestamp: new Date().toISOString()
+    };
+    setMessages(prev => [...prev, placeholderAiMessage]);
     setIsLoading(true);
 
-    try {
-      // Send to backend with current language
-      const response = await sendChatMessage(userMessage, i18n.language);
+    const history = buildChatHistory(messages);
+    const doneCountRef = { current: 0 };
+    const expectedModels = 3;
 
-      // Add AI responses to chat
-      const aiMessage = {
-        type: 'ai',
-        responses: response.responses,
-        timestamp: response.timestamp
-      };
-      setMessages(prev => [...prev, aiMessage]);
+    const onChunk = (payload) => {
+      setMessages(prev => {
+        const next = [...prev];
+        const last = next[next.length - 1];
+        if (last?.type !== 'ai' || !last.responses) return prev;
+        const responses = [...last.responses];
+        let idx = responses.findIndex((r) => r.modelName === payload.modelId);
+        if (idx < 0) {
+          responses.push({
+            modelName: payload.modelId,
+            modelLabel: payload.modelLabel,
+            response: '',
+            responseTime: undefined
+          });
+          idx = responses.length - 1;
+        }
+        const cur = responses[idx];
+        if (payload.chunk) {
+          responses[idx] = { ...cur, response: (cur.response || '') + payload.chunk };
+        }
+        if (payload.error) {
+          responses[idx] = { ...cur, error: payload.error };
+        }
+        if (payload.done) {
+          responses[idx] = { ...cur, responseTime: payload.responseTime };
+        }
+        next[next.length - 1] = { ...last, responses };
+        return next;
+      });
+      if (payload.done) {
+        doneCountRef.current += 1;
+        if (doneCountRef.current >= expectedModels) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    try {
+      await sendChatMessageStream(userMessage, i18n.language, history, onChunk);
+      // Ensure loading is turned off if stream ends without all "done" events
+      setIsLoading(false);
     } catch (err) {
       console.error('Error:', err);
-      setError(err.response?.data?.error || t('errorFailed'));
-    } finally {
+      setError(err.message || t('errorFailed'));
       setIsLoading(false);
     }
   };
@@ -158,13 +202,58 @@ const ChatPage = () => {
     }
   };
 
+  const handleClearHistory = () => {
+    setMessages([]);
+    setError(null);
+  };
+
+  const handleRetry = async (messageIndex, responseIdx) => {
+    const aiMsg = messages[messageIndex];
+    const userMsg = messages[messageIndex - 1];
+    if (!userMsg?.content || !aiMsg?.responses?.[responseIdx]) return;
+    const userMessage = userMsg.content;
+    const history = buildChatHistory(messages.slice(0, messageIndex - 1));
+    const modelId = aiMsg.responses[responseIdx].modelName;
+    const key = `${messageIndex}-${responseIdx}`;
+    setRetryingKey(key);
+    setError(null);
+    try {
+      const data = await retryFailedModel(userMessage, i18n.language, history, modelId);
+      setMessages((prev) => {
+        const next = [...prev];
+        const msg = next[messageIndex];
+        const responses = [...(msg.responses || [])];
+        responses[responseIdx] = data.response;
+        next[messageIndex] = { ...msg, responses };
+        return next;
+      });
+    } catch (err) {
+      console.error('Retry failed:', err);
+      setError(err.response?.data?.error || err.message || t('errorFailed'));
+    } finally {
+      setRetryingKey(null);
+    }
+  };
+
   return (
     <Box sx={{ height: 'calc(100vh - 100px)', display: 'flex', flexDirection: 'column', py: 3 }}>
       {/* Header */}
-      <Box sx={{ mb: 2 }}>
+      <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
         <Typography variant="body2" color="text.secondary">
           {t('chatHeader')}
         </Typography>
+        {messages.length > 0 && (
+          <Button
+            variant="outlined"
+            color="secondary"
+            size="small"
+            startIcon={<DeleteSweepIcon />}
+            onClick={handleClearHistory}
+            disabled={isLoading}
+          >
+            {t('clearHistory')}
+          </Button>
+        )}
       </Box>
 
       {/* Chat Messages Area */}
@@ -255,7 +344,10 @@ const ChatPage = () => {
                     gap: 2
                   }}
                 >
-                  {message.responses.map((response, idx) => (
+                  {message.responses.map((response, idx) => {
+                    const retryKey = `${index}-${idx}`;
+                    const isRetrying = retryingKey === retryKey;
+                    return (
                     <Card key={idx} elevation={2}>
                       <CardContent>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -265,16 +357,27 @@ const ChatPage = () => {
                             size="small"
                             variant="outlined"
                           />
-                          {response.responseTime && (
+                          {response.responseTime != null && (
                             <Typography variant="caption" color="text.secondary">
                               {(response.responseTime / 1000).toFixed(2)}s
                             </Typography>
                           )}
                         </Box>
                         {response.error ? (
-                          <Alert severity="error" sx={{ mt: 1 }}>
-                            {response.error}
-                          </Alert>
+                          <Box sx={{ mt: 1 }}>
+                            <Alert severity="error" sx={{ mb: 1 }}>
+                              {response.error}
+                            </Alert>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              startIcon={isRetrying ? <CircularProgress size={16} /> : <ReplayIcon />}
+                              onClick={() => handleRetry(index, idx)}
+                              disabled={isRetrying}
+                            >
+                              {isRetrying ? t('retryingLabel') : t('retryButton')}
+                            </Button>
+                          </Box>
                         ) : (
                           <Box
                             sx={{
@@ -300,7 +403,8 @@ const ChatPage = () => {
                         )}
                       </CardContent>
                     </Card>
-                  ))}
+                  );
+                  })}
                 </Box>
               </Box>
             )}
