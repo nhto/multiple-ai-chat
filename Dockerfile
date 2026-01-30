@@ -50,7 +50,7 @@ WORKDIR /home/node/src-ui
 COPY --chown=node:node ["frontend/", "."]
 
 RUN rm -Rf node_modules && \
-    npm ci && \
+    npm ci --legacy-peer-deps && \
     INLINE_RUNTIME_CHUNK=false npm run build
 
 EXPOSE 3000
