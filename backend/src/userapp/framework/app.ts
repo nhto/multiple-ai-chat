@@ -42,8 +42,9 @@ expressApp.use(cors({
   credentials: true
 }));
 
-expressApp.use(express.json());
-expressApp.use(express.urlencoded({ extended: false }));
+// Allow large JSON payloads for chat with images (base64); 5 images × 10MB ≈ 66MB base64
+expressApp.use(express.json({ limit: '70mb' }));
+expressApp.use(express.urlencoded({ extended: false, limit: '70mb' }));
 
 // API routes
 expressApp.use('/api/chat', chatRouter);

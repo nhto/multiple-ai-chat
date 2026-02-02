@@ -11,7 +11,13 @@ import {
   Card,
   CardContent,
   Chip,
-  Divider
+  Divider,
+  ToggleButton,
+  ToggleButtonGroup,
+  FormControlLabel,
+  Checkbox,
+  IconButton,
+  Tooltip
 } from '@mui/material';
 // ... rest of imports
 import SendIcon from '@mui/icons-material/Send';
@@ -19,11 +25,21 @@ import PersonIcon from '@mui/icons-material/Person';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import ReplayIcon from '@mui/icons-material/Replay';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import ImageIcon from '@mui/icons-material/Image';
+import CloseIcon from '@mui/icons-material/Close';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { sendChatMessageStream, buildChatHistory, retryFailedModel } from '../../api/chatApi';
+
+const AVAILABLE_MODELS = [
+  { id: 'x-ai/grok-4.1-fast', labelKey: 'modelGrok' },
+  { id: 'moonshotai/kimi-k2.5', labelKey: 'modelKimi' },
+  { id: 'qwen/qwen3-vl-8b-instruct', labelKey: 'modelQwen' }
+];
 
 const MarkdownComponents = {
 // ... MarkdownComponents content
@@ -109,7 +125,38 @@ const ChatPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [retryingKey, setRetryingKey] = useState(null);
+  const [modelCount, setModelCount] = useState(3);
+  const [selectedModelIds, setSelectedModelIds] = useState(AVAILABLE_MODELS.map((m) => m.id));
+  const [selectedImages, setSelectedImages] = useState([]);
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  const handleModelCountChange = (_, newCount) => {
+    if (newCount == null) return;
+    setModelCount(newCount);
+    setSelectedModelIds((prev) => {
+      if (newCount === 2 && prev.length === 3) return prev.slice(0, 2);
+      if (newCount === 3 && prev.length === 2) {
+        const missing = AVAILABLE_MODELS.find((m) => !prev.includes(m.id));
+        return missing ? [...prev, missing.id] : prev;
+      }
+      return prev;
+    });
+  };
+
+  const handleModelToggle = (modelId) => {
+    setSelectedModelIds((prev) => {
+      const isSelected = prev.includes(modelId);
+      if (isSelected) {
+        if (prev.length <= 2) return prev;
+        return prev.filter((id) => id !== modelId);
+      }
+      if (prev.length >= modelCount) {
+        return [...prev.slice(1), modelId];
+      }
+      return [...prev, modelId];
+    });
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -120,16 +167,30 @@ const ChatPage = () => {
   }, [messages]);
 
   const handleSendMessage = async () => {
-    if (!inputMessage.trim()) return;
+    if (!inputMessage.trim() && selectedImages.length === 0) return;
+    if (selectedModelIds.length < 2) return;
 
     const userMessage = inputMessage.trim();
+    const imagesToSend = [...selectedImages];
     setInputMessage('');
+    setSelectedImages([]);
     setError(null);
+
+    // Convert images to base64
+    let imageDataUrls = [];
+    try {
+      imageDataUrls = await Promise.all(imagesToSend.map(img => convertImageToBase64(img)));
+    } catch (err) {
+      console.error('Error converting images:', err);
+      setError(t('errorImageConversion'));
+      return;
+    }
 
     // Add user message to chat
     const newUserMessage = {
       type: 'user',
       content: userMessage,
+      images: imageDataUrls,
       timestamp: new Date().toISOString()
     };
     setMessages(prev => [...prev, newUserMessage]);
@@ -145,7 +206,7 @@ const ChatPage = () => {
 
     const history = buildChatHistory(messages);
     const doneCountRef = { current: 0 };
-    const expectedModels = 3;
+    const expectedModels = selectedModelIds.length;
 
     const onChunk = (payload) => {
       setMessages(prev => {
@@ -185,7 +246,10 @@ const ChatPage = () => {
     };
 
     try {
-      await sendChatMessageStream(userMessage, i18n.language, history, onChunk);
+      await sendChatMessageStream(userMessage, i18n.language, history, onChunk, {
+        modelIds: selectedModelIds,
+        images: imageDataUrls.length > 0 ? imageDataUrls : undefined
+      });
       // Ensure loading is turned off if stream ends without all "done" events
       setIsLoading(false);
     } catch (err) {
@@ -235,25 +299,208 @@ const ChatPage = () => {
     }
   };
 
+  const formatChatAsMarkdown = () => {
+    return messages
+      .map((msg) => {
+        if (msg.type === 'user') {
+          return `## ${t('userLabel')}\n\n${msg.content || ''}\n`;
+        }
+        if (msg.type === 'ai' && msg.responses?.length) {
+          return msg.responses
+            .map(
+              (r) =>
+                `### ${r.modelLabel}\n${r.error ? `*Error: ${r.error}*` : (r.response || '')}\n`
+            )
+            .join('\n---\n');
+        }
+        return '';
+      })
+      .filter(Boolean)
+      .join('\n');
+  };
+
+  const formatChatAsText = () => {
+    return messages
+      .map((msg) => {
+        if (msg.type === 'user') {
+          return `${t('userLabel')}:\n${msg.content || ''}\n`;
+        }
+        if (msg.type === 'ai' && msg.responses?.length) {
+          return msg.responses
+            .map((r) =>
+              `${r.modelLabel}:\n${r.error ? `Error: ${r.error}` : (r.response || '')}\n`
+            )
+            .join('\n');
+        }
+        return '';
+      })
+      .filter(Boolean)
+      .join('\n\n---\n\n');
+  };
+
+  const handleCopyChat = async () => {
+    try {
+      const text = formatChatAsText();
+      await navigator.clipboard.writeText(text);
+      // Could add a snackbar for "Copied!" feedback
+    } catch (err) {
+      console.error('Copy failed:', err);
+    }
+  };
+
+  const handleExportChat = () => {
+    const md = formatChatAsMarkdown();
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `chat-export-${new Date().toISOString().slice(0, 10)}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCopyResponse = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text || '');
+    } catch (err) {
+      console.error('Copy failed:', err);
+    }
+  };
+
+  const handleImageSelect = (event) => {
+    const files = Array.from(event.target.files || []);
+    const maxSize = 10 * 1024 * 1024; // 10 MB
+    const validImages = [];
+    
+    for (const file of files) {
+      if (!file.type.startsWith('image/')) {
+        setError(t('errorInvalidImageType'));
+        continue;
+      }
+      if (file.size > maxSize) {
+        setError(t('errorImageTooLarge', { maxSize: '10 MB' }));
+        continue;
+      }
+      validImages.push(file);
+    }
+    
+    if (validImages.length > 0) {
+      setSelectedImages(prev => [...prev, ...validImages].slice(0, 5)); // Max 5 images
+      setError(null);
+    }
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveImage = (index) => {
+    setSelectedImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const convertImageToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
   return (
-    <Box sx={{ height: 'calc(100vh - 100px)', display: 'flex', flexDirection: 'column', py: 3 }}>
+    <Box
+      sx={{
+        height: { xs: 'calc(100dvh - 56px)', sm: 'calc(100vh - 100px)' },
+        minHeight: { xs: 'calc(100dvh - 56px)', sm: 'calc(100vh - 100px)' },
+        display: 'flex',
+        flexDirection: 'column',
+        py: { xs: 1.5, sm: 3 },
+        px: { xs: 1, sm: 2 },
+        pb: { xs: 'calc(1.5rem + env(safe-area-inset-bottom))', sm: 3 }
+      }}
+    >
       {/* Header */}
-      <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-        <Typography variant="body2" color="text.secondary">
-          {t('chatHeader')}
-        </Typography>
-        {messages.length > 0 && (
-          <Button
-            variant="outlined"
-            color="secondary"
-            size="small"
-            startIcon={<DeleteSweepIcon />}
-            onClick={handleClearHistory}
-            disabled={isLoading}
-          >
-            {t('clearHistory')}
-          </Button>
+      <Box sx={{ mb: { xs: 1.5, sm: 2 } }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.8rem', sm: 'inherit' } }}>
+            {t('chatHeader')}
+          </Typography>
+          {messages.length > 0 && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Tooltip title={t('copyChat')}>
+              <IconButton
+                size="small"
+                onClick={handleCopyChat}
+                disabled={isLoading}
+                aria-label={t('copyChat')}
+              >
+                <ContentCopyIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title={t('exportChat')}>
+              <IconButton
+                size="small"
+                onClick={handleExportChat}
+                disabled={isLoading}
+                aria-label={t('exportChat')}
+              >
+                <FileDownloadIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Button
+              variant="outlined"
+              color="secondary"
+              size="small"
+              startIcon={<DeleteSweepIcon />}
+              onClick={handleClearHistory}
+              disabled={isLoading}
+              sx={{ minWidth: { xs: 'auto', sm: 'auto' } }}
+            >
+              {t('clearHistory')}
+            </Button>
+          </Box>
         )}
+        </Box>
+        {/* Model selection */}
+        <Paper variant="outlined" sx={{ p: 1.5, backgroundColor: 'background.paper' }}>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+            {t('modelsCountLabel')}
+          </Typography>
+          <ToggleButtonGroup
+            value={modelCount}
+            exclusive
+            onChange={handleModelCountChange}
+            size="small"
+            sx={{ mb: 1.5 }}
+          >
+            <ToggleButton value={2}>{t('compareModels', { count: 2 })}</ToggleButton>
+            <ToggleButton value={3}>{t('compareModels', { count: 3 })}</ToggleButton>
+          </ToggleButtonGroup>
+          {modelCount === 2 && (
+            <>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                {t('selectModelsLabel', { count: modelCount })}
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                {AVAILABLE_MODELS.map((model) => (
+                  <FormControlLabel
+                    key={model.id}
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={selectedModelIds.includes(model.id)}
+                        onChange={() => handleModelToggle(model.id)}
+                      />
+                    }
+                    label={t(model.labelKey)}
+                    sx={{ m: 0, '& .MuiFormControlLabel-label': { fontSize: '0.8rem' } }}
+                  />
+                ))}
+              </Box>
+            </>
+          )}
+        </Paper>
       </Box>
 
       {/* Chat Messages Area */}
@@ -262,9 +509,11 @@ const ChatPage = () => {
         sx={{
           flex: 1,
           overflow: 'auto',
-          p: 2,
-          mb: 2,
-          backgroundColor: '#f5f5f5'
+          overflowX: 'hidden',
+          p: { xs: 1.5, sm: 2 },
+          mb: { xs: 1.5, sm: 2 },
+          backgroundColor: '#f5f5f5',
+          minHeight: 0
         }}
       >
         {messages.length === 0 && (
@@ -274,26 +523,27 @@ const ChatPage = () => {
               justifyContent: 'center',
               alignItems: 'center',
               height: '100%',
-              flexDirection: 'column'
+              flexDirection: 'column',
+              px: { xs: 1, sm: 0 }
             }}
           >
-            <SmartToyIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
-            <Typography variant="h6" color="text.secondary">
+            <SmartToyIcon sx={{ fontSize: { xs: 48, sm: 64 }, color: 'text.secondary', mb: 2 }} />
+            <Typography variant="h6" color="text.secondary" sx={{ textAlign: 'center', fontSize: { xs: '1rem', sm: 'inherit' } }}>
               {t('emptyState')}
             </Typography>
           </Box>
         )}
 
         {messages.map((message, index) => (
-          <Box key={index} sx={{ mb: 3 }}>
+          <Box key={index} sx={{ mb: { xs: 2, sm: 3 } }}>
             {message.type === 'user' ? (
               // User Message
               <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
                 <Paper
                   elevation={1}
                   sx={{
-                    p: 2,
-                    maxWidth: '80%',
+                    p: { xs: 1.5, sm: 2 },
+                    maxWidth: { xs: '95%', sm: '90%', md: '80%' },
                     backgroundColor: '#e3f2fd',
                     color: 'text.primary',
                     borderRadius: '16px 16px 2px 16px',
@@ -301,10 +551,45 @@ const ChatPage = () => {
                     borderColor: '#bbdefb'
                   }}
                 >
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, color: 'primary.main' }}>
-                    <PersonIcon sx={{ mr: 1, fontSize: 20 }} />
-                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>{t('userLabel')}</Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, color: 'primary.main', width: '100%' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <PersonIcon sx={{ mr: 1, fontSize: 20 }} />
+                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>{t('userLabel')}</Typography>
+                    </Box>
+                    <Tooltip title={t('copyMessage')}>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleCopyResponse(message.content)}
+                        aria-label={t('copyMessage')}
+                        sx={{ p: 0.25 }}
+                      >
+                        <ContentCopyIcon sx={{ fontSize: 16 }} />
+                      </IconButton>
+                    </Tooltip>
                   </Box>
+                  {message.images && message.images.length > 0 && (
+                    <Box sx={{ mb: 1.5, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                      {message.images.map((imgUrl, imgIdx) => (
+                        <Box
+                          key={imgIdx}
+                          sx={{
+                            maxWidth: 200,
+                            maxHeight: 200,
+                            borderRadius: 1,
+                            overflow: 'hidden',
+                            border: '1px solid',
+                            borderColor: 'divider'
+                          }}
+                        >
+                          <img
+                            src={imgUrl}
+                            alt={`Uploaded ${imgIdx + 1}`}
+                            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                          />
+                        </Box>
+                      ))}
+                    </Box>
+                  )}
                   <Box 
                     sx={{ 
                       '& p': { m: 0, color: 'inherit' },
@@ -312,56 +597,78 @@ const ChatPage = () => {
                       '& li': { mb: 0.5 }
                     }}
                   >
-                    <ReactMarkdown 
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        p: ({ children }) => <Typography variant="body1">{children}</Typography>,
-                        li: ({ children }) => (
-                          <Box component="li">
-                            <Typography variant="body1">{children}</Typography>
-                          </Box>
-                        ),
-                      }}
-                    >
-                      {message.content}
-                    </ReactMarkdown>
+                    {message.content && (
+                      <ReactMarkdown 
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          p: ({ children }) => <Typography variant="body1">{children}</Typography>,
+                          li: ({ children }) => (
+                            <Box component="li">
+                              <Typography variant="body1">{children}</Typography>
+                            </Box>
+                          ),
+                        }}
+                      >
+                        {message.content}
+                      </ReactMarkdown>
+                    )}
                   </Box>
                 </Paper>
               </Box>
             ) : (
               // AI Responses
               <Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, ml: 1 }}>
-                  <SmartToyIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                  <Typography variant="subtitle2" color="text.secondary">
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: { xs: 1.5, sm: 2 }, ml: { xs: 0.5, sm: 1 } }}>
+                  <SmartToyIcon sx={{ mr: 1, color: 'text.secondary', fontSize: { xs: 18, sm: 24 } }} />
+                  <Typography variant="subtitle2" color="text.secondary" sx={{ fontSize: { xs: '0.7rem', sm: 'inherit' } }}>
                     {t('aiResponsesLabel')}
                   </Typography>
                 </Box>
                 <Box
                   sx={{
                     display: 'grid',
-                    gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
-                    gap: 2
+                    gridTemplateColumns: {
+                      xs: '1fr',
+                      sm: `repeat(${Math.min(message.responses?.length || 3, 3)}, 1fr)`
+                    },
+                    gap: { xs: 1.5, sm: 2 }
                   }}
                 >
                   {message.responses.map((response, idx) => {
                     const retryKey = `${index}-${idx}`;
                     const isRetrying = retryingKey === retryKey;
                     return (
-                    <Card key={idx} elevation={2}>
-                      <CardContent>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                    <Card key={idx} elevation={2} sx={{ minWidth: 0 }}>
+                      <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: { xs: 1.5, sm: 2 }, gap: 1, minWidth: 0 }}>
                           <Chip
                             label={response.modelLabel}
                             color="primary"
                             size="small"
                             variant="outlined"
+                            sx={{
+                              fontSize: { xs: '0.7rem', sm: '0.8125rem' },
+                              maxWidth: '100%',
+                              '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' }
+                            }}
                           />
-                          {response.responseTime != null && (
-                            <Typography variant="caption" color="text.secondary">
-                              {(response.responseTime / 1000).toFixed(2)}s
-                            </Typography>
-                          )}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            {response.responseTime != null && (
+                              <Typography variant="caption" color="text.secondary">
+                                {(response.responseTime / 1000).toFixed(2)}s
+                              </Typography>
+                            )}
+                            <Tooltip title={t('copyResponse')}>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleCopyResponse(response.error ? response.error : response.response)}
+                                aria-label={t('copyResponse')}
+                                sx={{ p: 0.25 }}
+                              >
+                                <ContentCopyIcon sx={{ fontSize: 16 }} />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
                         </Box>
                         {response.error ? (
                           <Box sx={{ mt: 1 }}>
@@ -381,12 +688,12 @@ const ChatPage = () => {
                         ) : (
                           <Box
                             sx={{
-                              maxHeight: '400px',
+                              maxHeight: { xs: '300px', sm: '400px' },
                               overflow: 'auto',
-                              px: 2, // Add some padding for the scrollbar
-                              '&::-webkit-scrollbar': {
-                                width: '6px',
-                              },
+                              overflowX: 'auto',
+                              px: { xs: 1, sm: 2 },
+                              '& pre': { overflow: 'auto', maxWidth: '100%' },
+                              '&::-webkit-scrollbar': { width: '6px' },
                               '&::-webkit-scrollbar-thumb': {
                                 backgroundColor: 'rgba(0,0,0,0.1)',
                                 borderRadius: '3px',
@@ -412,9 +719,9 @@ const ChatPage = () => {
         ))}
 
         {isLoading && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
-            <CircularProgress size={40} />
-            <Typography variant="body2" color="text.secondary" sx={{ ml: 2, alignSelf: 'center' }}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', my: 2, flexWrap: 'wrap', gap: 1 }}>
+            <CircularProgress size={32} sx={{ flexShrink: 0 }} />
+            <Typography variant="body2" color="text.secondary" sx={{ alignSelf: 'center', fontSize: { xs: '0.8rem', sm: 'inherit' } }}>
               {t('loadingState')}
             </Typography>
           </Box>
@@ -425,37 +732,106 @@ const ChatPage = () => {
 
       {/* Error Display */}
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+        <Alert severity="error" sx={{ mb: { xs: 1.5, sm: 2 } }} onClose={() => setError(null)}>
           {error}
         </Alert>
       )}
 
       {/* Input Area */}
-      <Paper elevation={3} sx={{ p: 2 }}>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <TextField
-            fullWidth
-            multiline
-            maxRows={4}
-            placeholder={t('inputPlaceholder')}
-            value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
-            onKeyPress={handleKeyPress}
-            disabled={isLoading}
-            variant="outlined"
-          />
+      <Paper elevation={3} sx={{ p: { xs: 1.5, sm: 2 }, pb: { xs: 'calc(1.5rem + env(safe-area-inset-bottom))', sm: 2 } }}>
+        {/* Image Preview */}
+        {selectedImages.length > 0 && (
+          <Box sx={{ mb: 1.5, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+            {selectedImages.map((image, index) => (
+              <Box
+                key={index}
+                sx={{
+                  position: 'relative',
+                  width: 80,
+                  height: 80,
+                  borderRadius: 1,
+                  overflow: 'hidden',
+                  border: '1px solid',
+                  borderColor: 'divider'
+                }}
+              >
+                <img
+                  src={URL.createObjectURL(image)}
+                  alt={`Preview ${index + 1}`}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+                <IconButton
+                  size="small"
+                  onClick={() => handleRemoveImage(index)}
+                  sx={{
+                    position: 'absolute',
+                    top: 2,
+                    right: 2,
+                    backgroundColor: 'rgba(0,0,0,0.6)',
+                    color: 'white',
+                    padding: '2px',
+                    '&:hover': { backgroundColor: 'rgba(0,0,0,0.8)' }
+                  }}
+                >
+                  <CloseIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </Box>
+            ))}
+          </Box>
+        )}
+        
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1 }}>
+          <Box sx={{ display: 'flex', gap: 1, flex: 1 }}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleImageSelect}
+              style={{ display: 'none' }}
+            />
+            <Tooltip title={t('uploadImage')}>
+              <IconButton
+                color="primary"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isLoading || selectedImages.length >= 5}
+                sx={{ alignSelf: 'flex-end' }}
+              >
+                <ImageIcon />
+              </IconButton>
+            </Tooltip>
+            <TextField
+              fullWidth
+              multiline
+              maxRows={4}
+              placeholder={t('inputPlaceholder')}
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              onKeyPress={handleKeyPress}
+              disabled={isLoading}
+              variant="outlined"
+              size="small"
+              sx={{
+                '& .MuiInputBase-root': { alignItems: 'flex-end' },
+                '& .MuiInputBase-input': { py: { xs: 1, sm: 1.5 } }
+              }}
+            />
+          </Box>
           <Button
             variant="contained"
             color="primary"
             onClick={handleSendMessage}
-            disabled={isLoading || !inputMessage.trim()}
+            disabled={isLoading || (!inputMessage.trim() && selectedImages.length === 0) || selectedModelIds.length < 2}
             endIcon={<SendIcon />}
-            sx={{ minWidth: '100px' }}
+            sx={{
+              minWidth: { xs: '100%', sm: '100px' },
+              alignSelf: { sm: 'flex-end' }
+            }}
           >
             {t('sendButton')}
           </Button>
         </Box>
-        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block', fontSize: { xs: '0.7rem', sm: 'inherit' } }}>
           {t('inputCaption')}
         </Typography>
       </Paper>

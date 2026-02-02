@@ -5,16 +5,18 @@ import logger from '../utilities/logger';
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-// Three models for comparison - you can customize these
-const MODELS = {
-  creative: 'z-ai/glm-4.5-air:free', // Good for creative responses
-  accurate: 'arcee-ai/trinity-large-preview:free', // Good for accuracy
-  fast: 'deepseek/deepseek-r1-0528:free' // Good for quick responses
-};
+/** Available models for user selection */
+export const AVAILABLE_MODELS = [
+  { id: 'x-ai/grok-4.1-fast', label: 'xAI: Grok 4.1 Fast' },
+  { id: 'moonshotai/kimi-k2.5', label: 'MoonshotAI: Kimi K2.5' },
+  { id: 'qwen/qwen3-vl-8b-instruct', label: 'Qwen: Qwen3 VL 8B Instruct' }
+] as const;
+
+const ALLOWED_IDS: Set<string> = new Set(AVAILABLE_MODELS.map(m => m.id));
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
-  content: string;
+  content: string | Array<{ type: 'text' | 'image_url'; text?: string; image_url?: { url: string } }>;
 }
 
 export interface ModelResponse {
@@ -28,6 +30,7 @@ export interface ModelResponse {
 /** One turn in conversation history: user message + each model's response */
 export interface HistoryTurn {
   userMessage: string;
+  images?: string[];
   responses: Array<{ modelName: string; response: string }>;
 }
 
@@ -51,7 +54,8 @@ function buildMessagesForModel(
   history: HistoryTurn[],
   currentMessage: string,
   language: string,
-  modelId: string
+  modelId: string,
+  currentImages?: string[]
 ): ChatMessage[] {
   const systemPrompt = getSystemPrompt(language);
   const messages: ChatMessage[] = [
@@ -59,7 +63,19 @@ function buildMessagesForModel(
   ];
 
   for (const turn of history) {
-    messages.push({ role: 'user', content: turn.userMessage });
+    // Build user message content (text + optional images)
+    if (turn.images && turn.images.length > 0) {
+      const contentParts: Array<{ type: 'text' | 'image_url'; text?: string; image_url?: { url: string } }> = [];
+      const turnText = turn.userMessage?.trim() || 'What do you see in this image?';
+      contentParts.push({ type: 'text', text: turnText });
+      for (const imgUrl of turn.images) {
+        contentParts.push({ type: 'image_url', image_url: { url: imgUrl } });
+      }
+      messages.push({ role: 'user', content: contentParts });
+    } else {
+      messages.push({ role: 'user', content: turn.userMessage });
+    }
+    
     const modelResponse = turn.responses.find(r => r.modelName === modelId);
     const assistantContent = modelResponse?.response?.trim()
       ? modelResponse.response
@@ -67,7 +83,20 @@ function buildMessagesForModel(
     messages.push({ role: 'assistant', content: assistantContent });
   }
 
-  messages.push({ role: 'user', content: currentMessage });
+  // Add current message with optional images
+  if (currentImages && currentImages.length > 0) {
+    const contentParts: Array<{ type: 'text' | 'image_url'; text?: string; image_url?: { url: string } }> = [];
+    // Vision APIs typically require at least one text part; use fallback if user sent only images
+    const textContent = currentMessage?.trim() || 'What do you see in this image? Please describe or answer based on the image(s).';
+    contentParts.push({ type: 'text', text: textContent });
+    for (const imgUrl of currentImages) {
+      contentParts.push({ type: 'image_url', image_url: { url: imgUrl } });
+    }
+    messages.push({ role: 'user', content: contentParts });
+  } else {
+    messages.push({ role: 'user', content: currentMessage });
+  }
+  
   return messages;
 }
 
@@ -128,31 +157,56 @@ async function querySingleModel(
   }
 }
 
+type ModelConfig = { id: string; label: string };
+
+/** Resolve model configs from user-selected modelIds (2 or 3 models) */
+function getModelConfigs(modelIds?: string[]): ModelConfig[] {
+  if (!modelIds || !Array.isArray(modelIds) || modelIds.length < 2 || modelIds.length > 3) {
+    return AVAILABLE_MODELS.map(m => ({ id: m.id, label: m.label }));
+  }
+  const configs: ModelConfig[] = [];
+  for (const id of modelIds) {
+    if (!ALLOWED_IDS.has(id)) continue;
+    const m = AVAILABLE_MODELS.find(av => av.id === id);
+    if (m && configs.length < 3) configs.push({ id: m.id, label: m.label });
+  }
+  return configs.length >= 2 ? configs : AVAILABLE_MODELS.map(m => ({ id: m.id, label: m.label }));
+}
+
 /**
  * Query multiple AI models in parallel, optionally with conversation history
  */
 export async function queryMultipleModels(
   userMessage: string,
   language?: string,
-  history?: HistoryTurn[]
+  history?: HistoryTurn[],
+  modelIds?: string[],
+  images?: string[]
 ): Promise<ModelResponse[]> {
+  const modelConfigs = getModelConfigs(modelIds);
   logger.info(
-    `Querying multiple AI models with language: ${language}, history turns: ${history?.length ?? 0}`
+    `Querying ${modelConfigs.length} AI models with language: ${language}, history turns: ${history?.length ?? 0}, images: ${images?.length ?? 0}, models: ${modelConfigs.map(c => c.id).join(', ')}`
   );
-
-  const modelConfigs = [
-    { id: MODELS.creative, label: 'Z.AI: GLM 4.5 Air' },
-    { id: MODELS.accurate, label: 'Arcee AI: Trinity Large Preview' },
-    { id: MODELS.fast, label: 'DeepSeek: R1 0528' }
-  ];
 
   const promises = modelConfigs.map(config => {
     const messages = history && history.length > 0
-      ? buildMessagesForModel(history, userMessage, language || 'en', config.id)
-      : [
-          { role: 'system', content: getSystemPrompt(language) } as ChatMessage,
-          { role: 'user', content: userMessage } as ChatMessage
-        ];
+      ? buildMessagesForModel(history, userMessage, language || 'en', config.id, images)
+      : (() => {
+          const msgs: ChatMessage[] = [{ role: 'system', content: getSystemPrompt(language) }];
+          if (images && images.length > 0) {
+            const contentParts: Array<{ type: 'text' | 'image_url'; text?: string; image_url?: { url: string } }> = [];
+            if (userMessage) {
+              contentParts.push({ type: 'text', text: userMessage });
+            }
+            for (const imgUrl of images) {
+              contentParts.push({ type: 'image_url', image_url: { url: imgUrl } });
+            }
+            msgs.push({ role: 'user', content: contentParts });
+          } else {
+            msgs.push({ role: 'user', content: userMessage });
+          }
+          return msgs;
+        })();
     return querySingleModel(config.id, config.label, messages);
   });
 
@@ -184,14 +238,8 @@ export interface StreamChunkPayload {
   responseTime?: number;
 }
 
-const MODEL_CONFIGS = [
-  { id: MODELS.creative, label: 'Z.AI: GLM 4.5 Air' },
-  { id: MODELS.accurate, label: 'Arcee AI: Trinity Large Preview' },
-  { id: MODELS.fast, label: 'DeepSeek: R1 0528' }
-];
-
 /**
- * Query a single model by id (for retry). Returns null if modelId is not in MODEL_CONFIGS.
+ * Query a single model by id (for retry). Returns null if modelId is not in allowed list.
  */
 export async function querySingleModelForRetry(
   userMessage: string,
@@ -199,7 +247,7 @@ export async function querySingleModelForRetry(
   history: HistoryTurn[] | undefined,
   modelId: string
 ): Promise<ModelResponse | null> {
-  const config = MODEL_CONFIGS.find(c => c.id === modelId);
+  const config = AVAILABLE_MODELS.find(c => c.id === modelId);
   if (!config) {
     logger.warn(`Retry requested for unknown modelId: ${modelId}`);
     return null;
@@ -287,19 +335,34 @@ export async function streamMultipleModels(
   userMessage: string,
   language: string | undefined,
   history: HistoryTurn[] | undefined,
-  writeChunk: (payload: StreamChunkPayload) => Promise<void>
+  writeChunk: (payload: StreamChunkPayload) => Promise<void>,
+  modelIds?: string[],
+  images?: string[]
 ): Promise<void> {
+  const modelConfigs = getModelConfigs(modelIds);
   logger.info(
-    `Streaming multiple AI models with language: ${language}, history turns: ${history?.length ?? 0}`
+    `Streaming ${modelConfigs.length} AI models with language: ${language}, history turns: ${history?.length ?? 0}, images: ${images?.length ?? 0}, models: ${modelConfigs.map(c => c.id).join(', ')}`
   );
 
-  const tasks = MODEL_CONFIGS.map(config => {
+  const tasks = modelConfigs.map(config => {
     const messages = history && history.length > 0
-      ? buildMessagesForModel(history, userMessage, language || 'en', config.id)
-      : [
-          { role: 'system', content: getSystemPrompt(language) } as ChatMessage,
-          { role: 'user', content: userMessage } as ChatMessage
-        ];
+      ? buildMessagesForModel(history, userMessage, language || 'en', config.id, images)
+      : (() => {
+          const msgs: ChatMessage[] = [{ role: 'system', content: getSystemPrompt(language) }];
+          if (images && images.length > 0) {
+            const contentParts: Array<{ type: 'text' | 'image_url'; text?: string; image_url?: { url: string } }> = [];
+            if (userMessage) {
+              contentParts.push({ type: 'text', text: userMessage });
+            }
+            for (const imgUrl of images) {
+              contentParts.push({ type: 'image_url', image_url: { url: imgUrl } });
+            }
+            msgs.push({ role: 'user', content: contentParts });
+          } else {
+            msgs.push({ role: 'user', content: userMessage });
+          }
+          return msgs;
+        })();
     return streamSingleModel(config.id, config.label, messages, writeChunk);
   });
 

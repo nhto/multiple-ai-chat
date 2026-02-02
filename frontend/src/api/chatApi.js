@@ -51,13 +51,19 @@ export const sendChatMessage = async (message, language, history = []) => {
  * @param {string} language - The selected language
  * @param {Array<{ userMessage: string, responses: Array<{ modelName: string, response: string }> }>} [history] - Previous turns
  * @param {(payload: { modelId: string, modelLabel: string, chunk?: string, done?: boolean, error?: string, responseTime?: number }) => void} onChunk - Callback for each chunk
- * @param {{ signal?: AbortSignal }} [options] - Optional abort signal
+ * @param {{ signal?: AbortSignal, modelIds?: string[], images?: string[] }} [options] - Optional abort signal, model IDs, and images
  * @returns {Promise<void>}
  */
 export const sendChatMessageStream = async (message, language, history = [], onChunk, options = {}) => {
   const body = { message, language };
   if (history && history.length > 0) {
     body.history = history;
+  }
+  if (options.modelIds && options.modelIds.length >= 2) {
+    body.modelIds = options.modelIds;
+  }
+  if (options.images && options.images.length > 0) {
+    body.images = options.images;
   }
   const response = await fetch(`${API_BASE_URL}/api/chat/stream`, {
     method: 'POST',

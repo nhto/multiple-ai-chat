@@ -32,26 +32,27 @@ function NavBarOnTop() {
           color: 'text.primary'
         }}
       >
-        <Toolbar sx={{ justifyContent: 'space-between' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <ChatIcon sx={{ mr: 1.5, color: 'secondary.main', fontSize: 28 }} />
-            <Typography 
-              variant="h6" 
-              noWrap 
-              sx={{ 
-                fontWeight: 800, 
+        <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 1.5, sm: 2 }, minHeight: { xs: 56, sm: 64 } }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
+            <ChatIcon sx={{ mr: { xs: 1, sm: 1.5 }, color: 'secondary.main', fontSize: { xs: 24, sm: 28 }, flexShrink: 0 }} />
+            <Typography
+              variant="h6"
+              noWrap
+              sx={{
+                fontWeight: 800,
                 letterSpacing: '-0.02em',
                 background: 'linear-gradient(45deg, #202123 30%, #10a37f 90%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
+                fontSize: { xs: '1.1rem', sm: '1.25rem' }
               }}
             >
               MAC
             </Typography>
           </Box>
 
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <FormControl size="small" sx={{ minWidth: 120 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+            <FormControl size="small" sx={{ minWidth: { xs: 100, sm: 120 } }}>
               <Select
                 value={i18n.language || 'en'}
                 onChange={handleLanguageChange}
