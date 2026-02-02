@@ -15,6 +15,7 @@ const resources = {
       sendButton: 'Send',
       inputCaption: 'Press Enter to send, Shift+Enter for new line',
       clearHistory: 'Clear history',
+      conversationRestored: 'Conversation restored',
       copyChat: 'Copy chat',
       exportChat: 'Export chat',
       copyResponse: 'Copy response',
@@ -50,6 +51,7 @@ const resources = {
       sendButton: '發送',
       inputCaption: '按 Enter 發送，Shift+Enter 換行',
       clearHistory: '清除記錄',
+      conversationRestored: '對話已恢復',
       copyChat: '複製聊天',
       exportChat: '匯出聊天',
       copyMessage: '複製訊息',
@@ -85,6 +87,7 @@ const resources = {
       sendButton: '发送',
       inputCaption: '按 Enter 发送，Shift+Enter 换行',
       clearHistory: '清除记录',
+      conversationRestored: '对话已恢复',
       copyChat: '复制聊天',
       exportChat: '导出聊天',
       copyMessage: '复制消息',
@@ -115,8 +118,8 @@ i18n
   .use(initReactI18next)
   .init({
     resources,
-    lng: 'en', // Set default language to English
-    fallbackLng: 'en',
+    lng: 'zhHK', // Set default language to Traditional Chinese
+    fallbackLng: 'zhHK',
     interpolation: {
       escapeValue: false
     }

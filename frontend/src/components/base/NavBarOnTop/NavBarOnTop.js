@@ -54,7 +54,7 @@ function NavBarOnTop() {
           <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
             <FormControl size="small" sx={{ minWidth: { xs: 100, sm: 120 } }}>
               <Select
-                value={i18n.language || 'en'}
+                value={i18n.language || 'zhHK'}
                 onChange={handleLanguageChange}
                 displayEmpty
                 startAdornment={<LanguageIcon sx={{ mr: 1, color: 'text.secondary', fontSize: 20 }} />}
@@ -67,9 +67,9 @@ function NavBarOnTop() {
                   }
                 }}
               >
-                <MenuItem value="en">English</MenuItem>
                 <MenuItem value="zhHK">繁體中文</MenuItem>
                 <MenuItem value="zhCN">简体中文</MenuItem>
+                <MenuItem value="en">English</MenuItem>
               </Select>
             </FormControl>
           </Box>
