@@ -1,40 +1,78 @@
 import React from 'react';
-import { styled } from '@mui/system';
-import { useTheme } from '@mui/material/styles';
 import Box from '@mui/material/Box';
-import Drawer from '@mui/material/Drawer';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
-import MenuList from '@mui/material/MenuList';
-import MenuItem from '@mui/material/MenuItem';
 import Typography from '@mui/material/Typography';
-import Divider from '@mui/material/Divider';
-import IconButton from '@mui/material/IconButton';
-import MenuIcon from '@mui/icons-material/Menu';
-import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
-import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import ListItemIcon from '@mui/material/ListItemIcon';
-import ListItemText from '@mui/material/ListItemText';
-import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
-import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
-import ExitToAppIcon from '@mui/icons-material/ExitToApp';
-import UploadIcon from '@mui/icons-material/Upload';
+import ChatIcon from '@mui/icons-material/Chat';
 import { NavLink } from 'react-router-dom';
-import { useSelector } from 'react-redux';
+import Button from '@mui/material/Button';
+import MenuItem from '@mui/material/MenuItem';
+import Select from '@mui/material/Select';
+import FormControl from '@mui/material/FormControl';
+import LanguageIcon from '@mui/icons-material/Language';
+import { useTranslation } from 'react-i18next';
 
 function NavBarOnTop() {
-  const theme = useTheme();
-  const [open, setOpen] = React.useState(false);
+  const { t, i18n } = useTranslation();
 
-  const appState = useSelector((state) => state.app);
+  const handleLanguageChange = (event) => {
+    i18n.changeLanguage(event.target.value);
+  };
 
   return (
     <>
-      <AppBar position="sticky">
-        <Toolbar>
-          <Typography noWrap sx={{ fontSize: "1.6rem", flexGrow: 1 }}>
-            MAC
-          </Typography>
+      <AppBar 
+        position="sticky" 
+        elevation={0} 
+        sx={{ 
+          backgroundColor: 'rgba(255, 255, 255, 0.8)', 
+          backdropFilter: 'blur(8px)',
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          color: 'text.primary'
+        }}
+      >
+        <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 1.5, sm: 2 }, minHeight: { xs: 56, sm: 64 } }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
+            <ChatIcon sx={{ mr: { xs: 1, sm: 1.5 }, color: 'secondary.main', fontSize: { xs: 24, sm: 28 }, flexShrink: 0 }} />
+            <Typography
+              variant="h6"
+              noWrap
+              sx={{
+                fontWeight: 800,
+                letterSpacing: '-0.02em',
+                background: 'linear-gradient(45deg, #202123 30%, #10a37f 90%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                fontSize: { xs: '1.1rem', sm: '1.25rem' }
+              }}
+            >
+              MAC
+            </Typography>
+          </Box>
+
+          <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+            <FormControl size="small" sx={{ minWidth: { xs: 100, sm: 120 } }}>
+              <Select
+                value={i18n.language || 'zhHK'}
+                onChange={handleLanguageChange}
+                displayEmpty
+                startAdornment={<LanguageIcon sx={{ mr: 1, color: 'text.secondary', fontSize: 20 }} />}
+                sx={{ 
+                  borderRadius: '8px',
+                  '& .MuiSelect-select': {
+                    display: 'flex',
+                    alignItems: 'center',
+                    py: 1
+                  }
+                }}
+              >
+                <MenuItem value="zhHK">繁體中文</MenuItem>
+                <MenuItem value="zhCN">简体中文</MenuItem>
+                <MenuItem value="en">English</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
         </Toolbar>
       </AppBar>
     </>
