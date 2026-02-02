@@ -399,6 +399,29 @@ const ChatPage = () => {
     setSelectedImages(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handlePaste = (event) => {
+    const items = event.clipboardData?.items;
+    if (!items) return;
+    const maxSize = 10 * 1024 * 1024; // 10 MB
+    const validImages = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind !== 'file' || !item.type.startsWith('image/')) continue;
+      const file = item.getAsFile();
+      if (!file) continue;
+      if (file.size > maxSize) {
+        setError(t('errorImageTooLarge', { maxSize: '10 MB' }));
+        continue;
+      }
+      validImages.push(file);
+    }
+    if (validImages.length > 0) {
+      event.preventDefault();
+      setSelectedImages(prev => [...prev, ...validImages].slice(0, 5));
+      setError(null);
+    }
+  };
+
   const convertImageToBase64 = (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -634,8 +657,17 @@ const ChatPage = () => {
                     gap: { xs: 1.5, sm: 2 }
                   }}
                 >
-                  {message.responses.map((response, idx) => {
-                    const retryKey = `${index}-${idx}`;
+                  {[...(message.responses || [])]
+                    .sort((a, b) => {
+                      const orderA = AVAILABLE_MODELS.findIndex((m) => m.id === a.modelName);
+                      const orderB = AVAILABLE_MODELS.findIndex((m) => m.id === b.modelName);
+                      const ia = orderA === -1 ? 999 : orderA;
+                      const ib = orderB === -1 ? 999 : orderB;
+                      return ia - ib;
+                    })
+                    .map((response, idx) => {
+                    const responseIdx = message.responses.findIndex((r) => r.modelName === response.modelName);
+                    const retryKey = `${index}-${responseIdx}`;
                     const isRetrying = retryingKey === retryKey;
                     return (
                     <Card key={idx} elevation={2} sx={{ minWidth: 0 }}>
@@ -679,7 +711,7 @@ const ChatPage = () => {
                               variant="outlined"
                               size="small"
                               startIcon={isRetrying ? <CircularProgress size={16} /> : <ReplayIcon />}
-                              onClick={() => handleRetry(index, idx)}
+                              onClick={() => handleRetry(index, responseIdx)}
                               disabled={isRetrying}
                             >
                               {isRetrying ? t('retryingLabel') : t('retryButton')}
@@ -808,6 +840,7 @@ const ChatPage = () => {
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={handleKeyPress}
+              onPaste={handlePaste}
               disabled={isLoading}
               variant="outlined"
               size="small"
