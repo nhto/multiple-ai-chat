@@ -4,12 +4,32 @@ import logger from '../../../../utilities/logger';
 
 const router = Router();
 
+/** Per-model character limits based on context window size.
+ *  Roughly: limit ≈ 1/8 of context window in tokens × 4 chars/token,
+ *  leaving headroom for system prompt, history, and output.
+ */
+const MODEL_CHAR_LIMITS: Record<string, number> = {
+  'x-ai/grok-4.1-fast':          64_000,   // 131K context
+  'moonshotai/kimi-k2.5':        64_000,   // 131K context
+  'qwen/qwen3-vl-8b-instruct':   16_000,   // 32K  context
+};
+
+const DEFAULT_CHAR_LIMIT = 16_000; // safe fallback (smallest model)
+
+/** Return the effective message-length limit for a set of selected models.
+ *  Uses the minimum across all chosen models so every model can handle the input.
+ */
+function getCharLimit(modelIds?: string[]): number {
+  if (!modelIds || modelIds.length === 0) return DEFAULT_CHAR_LIMIT;
+  return Math.min(...modelIds.map(id => MODEL_CHAR_LIMITS[id] ?? DEFAULT_CHAR_LIMIT));
+}
+
 /**
  * POST /api/chat
  * Send a message to multiple AI models and get responses
  */
 /** Validate and normalize conversation history from request body */
-function parseHistory(bodyHistory: unknown): Array<{ userMessage: string; images?: string[]; responses: Array<{ modelName: string; response: string }> }> | undefined {
+function parseHistory(bodyHistory: unknown, charLimit: number = DEFAULT_CHAR_LIMIT): Array<{ userMessage: string; images?: string[]; responses: Array<{ modelName: string; response: string }> }> | undefined {
   if (bodyHistory == null || !Array.isArray(bodyHistory)) {
     return undefined;
   }
@@ -21,7 +41,7 @@ function parseHistory(bodyHistory: unknown): Array<{ userMessage: string; images
       continue;
     }
     const userMessage = turn.userMessage.trim();
-    if (userMessage.length > 4000) continue;
+    if (userMessage.length > charLimit) continue;
     let responses: Array<{ modelName: string; response: string }> = [];
     if (Array.isArray(turn.responses)) {
       for (const r of turn.responses) {
@@ -75,15 +95,17 @@ router.post('/', async (req: Request, res: Response) => {
       });
     }
 
-    // Limit message length to prevent abuse
-    if (hasMessage && message.length > 4000) {
+    const modelIds = parseModelIds(bodyModelIds);
+    const charLimit = getCharLimit(modelIds);
+
+    // Limit message length to prevent abuse (model-aware)
+    if (hasMessage && message.length > charLimit) {
       return res.status(400).json({
-        error: 'Message is too long. Maximum length is 4000 characters.'
+        error: `Message is too long. Maximum length is ${charLimit.toLocaleString()} characters for the selected models.`
       });
     }
 
-    const history = parseHistory(bodyHistory);
-    const modelIds = parseModelIds(bodyModelIds);
+    const history = parseHistory(bodyHistory, charLimit);
     logger.info(
       `Received chat request with message length: ${message?.length ?? 0}, language: ${language}, history turns: ${history?.length ?? 0}, images: ${images?.length ?? 0}, modelIds: ${modelIds?.join(',') ?? 'default'}`
     );
@@ -124,14 +146,16 @@ router.post('/stream', async (req: Request, res: Response) => {
         error: 'Message or images are required'
       });
     }
-    if (hasMessage && message.length > 4000) {
+    const modelIds = parseModelIds(bodyModelIds);
+    const charLimit = getCharLimit(modelIds);
+
+    if (hasMessage && message.length > charLimit) {
       return res.status(400).json({
-        error: 'Message is too long. Maximum length is 4000 characters.'
+        error: `Message is too long. Maximum length is ${charLimit.toLocaleString()} characters for the selected models.`
       });
     }
 
-    const history = parseHistory(bodyHistory);
-    const modelIds = parseModelIds(bodyModelIds);
+    const history = parseHistory(bodyHistory, charLimit);
     logger.info(
       `Received chat stream request with message length: ${message?.length ?? 0}, language: ${language}, history turns: ${history?.length ?? 0}, images: ${images?.length ?? 0}, modelIds: ${modelIds?.join(',') ?? 'default'}`
     );
@@ -187,18 +211,20 @@ router.post('/retry', async (req: Request, res: Response) => {
         error: 'Message is required and must be a non-empty string'
       });
     }
-    if (message.length > 4000) {
-      return res.status(400).json({
-        error: 'Message is too long. Maximum length is 4000 characters.'
-      });
-    }
     if (!modelId || typeof modelId !== 'string' || modelId.trim().length === 0) {
       return res.status(400).json({
         error: 'modelId is required for retry'
       });
     }
 
-    const history = parseHistory(bodyHistory);
+    const charLimit = getCharLimit([modelId.trim()]);
+    if (message.length > charLimit) {
+      return res.status(400).json({
+        error: `Message is too long. Maximum length is ${charLimit.toLocaleString()} characters for ${modelId}.`
+      });
+    }
+
+    const history = parseHistory(bodyHistory, charLimit);
     logger.info(
       `Retry request for model ${modelId}, message length: ${message.length}, history turns: ${history?.length ?? 0}`
     );
