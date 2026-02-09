@@ -34,8 +34,18 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import TurndownService from 'turndown';
 import { sendChatMessageStream, buildChatHistory, retryFailedModel } from '../../api/chatApi';
 import { loadChatState, saveChatState, clearChatState } from '../../utils/chatStorage';
+
+// Singleton turndown instance for HTML → Markdown conversion
+const turndownService = new TurndownService({
+  headingStyle: 'atx',
+  bulletListMarker: '-',
+  codeBlockStyle: 'fenced',
+  strongDelimiter: '**',
+  emDelimiter: '*',
+});
 
 const AVAILABLE_MODELS = [
   { id: 'x-ai/grok-4.1-fast', labelKey: 'modelGrok' },
@@ -692,8 +702,11 @@ const ChatPage = () => {
   };
 
   const handlePaste = (event) => {
-    const items = event.clipboardData?.items;
-    if (!items) return;
+    const clipboard = event.clipboardData;
+    if (!clipboard) return;
+
+    // 1. Handle pasted images
+    const items = clipboard.items;
     const maxSize = 10 * 1024 * 1024; // 10 MB
     const validImages = [];
     for (let i = 0; i < items.length; i++) {
@@ -711,6 +724,22 @@ const ChatPage = () => {
       event.preventDefault();
       setSelectedImages(prev => [...prev, ...validImages].slice(0, 5));
       setError(null);
+      return;
+    }
+
+    // 2. Handle rich text (HTML) paste – convert to Markdown to preserve formatting
+    const html = clipboard.getData('text/html');
+    if (html) {
+      event.preventDefault();
+      const markdown = turndownService.turndown(html).trim();
+      // Insert at cursor position within the current input
+      const target = event.target;
+      const start = target.selectionStart ?? inputMessage.length;
+      const end = target.selectionEnd ?? inputMessage.length;
+      const before = inputMessage.slice(0, start);
+      const after = inputMessage.slice(end);
+      const newValue = before + markdown + after;
+      setInputMessage(newValue);
     }
   };
 
