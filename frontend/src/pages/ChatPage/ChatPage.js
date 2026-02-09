@@ -18,7 +18,11 @@ import {
   Checkbox,
   IconButton,
   Tooltip,
-  Snackbar
+  Snackbar,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 // ... rest of imports
 import SendIcon from '@mui/icons-material/Send';
@@ -30,6 +34,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import ImageIcon from '@mui/icons-material/Image';
 import CloseIcon from '@mui/icons-material/Close';
+import OpenInFullIcon from '@mui/icons-material/OpenInFull';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -346,6 +351,7 @@ const ChatPage = () => {
   const [modelCount, setModelCount] = useState(3);
   const [selectedModelIds, setSelectedModelIds] = useState(AVAILABLE_MODELS.map((m) => m.id));
   const [selectedImages, setSelectedImages] = useState([]);
+  const [expandedInput, setExpandedInput] = useState(false);
   const [isRestored, setIsRestored] = useState(false);
   const [isLoadingState, setIsLoadingState] = useState(true);
   const messagesEndRef = useRef(null);
@@ -987,7 +993,7 @@ const ChatPage = () => {
             <TextField
               fullWidth
               multiline
-              maxRows={4}
+              maxRows={8}
               placeholder={t('inputPlaceholder')}
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
@@ -1001,6 +1007,16 @@ const ChatPage = () => {
                 '& .MuiInputBase-input': { py: { xs: 1, sm: 1.5 } }
               }}
             />
+            <Tooltip title={t('expandInput')}>
+              <IconButton
+                color="primary"
+                onClick={() => setExpandedInput(true)}
+                disabled={isLoading}
+                sx={{ alignSelf: 'flex-end' }}
+              >
+                <OpenInFullIcon />
+              </IconButton>
+            </Tooltip>
           </Box>
           <Button
             variant="contained"
@@ -1020,6 +1036,50 @@ const ChatPage = () => {
           {t('inputCaption')}
         </Typography>
       </Paper>
+
+      {/* Expanded input dialog */}
+      <Dialog
+        open={expandedInput}
+        onClose={() => setExpandedInput(false)}
+        fullWidth
+        maxWidth="md"
+        PaperProps={{
+          sx: { height: { xs: '80vh', sm: '70vh' }, display: 'flex', flexDirection: 'column' }
+        }}
+      >
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
+          {t('inputPlaceholder')}
+          <IconButton size="small" onClick={() => setExpandedInput(false)}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', pt: '8px !important' }}>
+          <TextField
+            autoFocus
+            fullWidth
+            multiline
+            placeholder={t('inputPlaceholder')}
+            value={inputMessage}
+            onChange={(e) => setInputMessage(e.target.value)}
+            onPaste={handlePaste}
+            disabled={isLoading}
+            variant="outlined"
+            sx={{
+              flex: 1,
+              '& .MuiInputBase-root': { height: '100%', alignItems: 'flex-start' },
+              '& .MuiInputBase-input': { height: '100% !important', overflow: 'auto !important' }
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ mr: 'auto' }}>
+            {t('inputCaption')}
+          </Typography>
+          <Button onClick={() => setExpandedInput(false)} variant="contained">
+            {t('collapseInput')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
